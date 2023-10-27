@@ -1,7 +1,7 @@
 #include <Encoder.h>
 #include <LedControl.h>  // Include the LedControl library
 int readPosition();
-
+// For testong git
 // If the either of the two padles are in bending mode and there
 // encoder does not registers any motion till this time, then throw error.
 unsigned int no_movement_time_period = 750; // Milliseconds
