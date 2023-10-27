@@ -79,8 +79,7 @@ int varCus = 0;
 enum display_state {
     BENDING,
     SHOWING_COUNTER,
-    Calibration_mode
-
+    CALIBRATION_MODE
 };
 
 
@@ -92,8 +91,8 @@ unsigned long incButtonsStartTime = 0;
 
 bool bending_just_started = false;
 
-//.....................................................................................
-//..........................Code For Err Handling .....................................
+
+// Error Handling Routine
 void err(int err_code) {
   // err_code:
   // 1: Both relays working together.
@@ -134,21 +133,22 @@ void err(int err_code) {
         lc.setChar(0, 4, '0', false); // Display "r" for error code 1
         lc.setChar(0, 5, '1', false); // Display "1" for error code 1
         if (digitalRead(inc_disp_1_btn) == LOW && digitalRead(inc_disp_2_btn) == LOW) {
-    if (incButtonsStartTime == 0) {
-        incButtonsStartTime = millis();
-    }
+        
+          if (incButtonsStartTime == 0) {
+            incButtonsStartTime = millis();
+          }
 
-    if (millis() - incButtonsStartTime >= 1000) {
-        display_1_state = Calibration_mode;
-        display_2_state = Calibration_mode;
-        calibrationModeEntered = true;
-         enterCalibrationMode();
-       
-    }
-} else {
-  // Handle the Calibration_mode state
-    incButtonsStartTime = 0;   
-}
+          if (millis() - incButtonsStartTime >= 1000) {
+            display_1_state = CALIBRATION_MODE;
+            display_2_state = CALIBRATION_MODE;
+            calibrationModeEntered = true;
+            enterCalibrationMode();
+          }
+
+        } else {
+          // Handle the Calibration_mode state
+          incButtonsStartTime = 0;   
+        }
         break;
       
       case 4:
@@ -179,9 +179,9 @@ void err(int err_code) {
     delay(500);
   }
 } 
-  //.......................................END.........................................
 
-  //.................................Voide Setup Start.................................
+
+
 void setup() {
   pinMode(DATA_PIN, INPUT);
   pinMode(CLOCK_PIN, OUTPUT);
@@ -206,94 +206,75 @@ void setup() {
   lc.shutdown(0, false); // Wake up the MAX7219
   lc.setIntensity(0, 8); // Set brightness (0-15, 0 being off, 15 being brightest)
   lc.clearDisplay(0);    // Clear the display
+
   // Initialize both displays with counting from 1 to 9 for each digit.
   for (int i = 9; i >= 0; i--) {
-    // Set units digit on Display 1 and Display 2
-    lc.setDigit(0, 0, i % 10, false); // Display units digit on Display 1
-    lc.setDigit(0, 3, i % 10, false); // Display units digit on Display 2
-
-    // Set tens digit on Display 1 and Display 2
-    lc.setDigit(0, 1, (i / 10) % 10, false); // Display tens digit on Display 1
-    lc.setDigit(0, 4, (i / 10) % 10, false); // Display tens digit on Display 2
-
-    // Set hundreds digit on Display 1 and Display 2
-    lc.setDigit(0, 2, i / 100, false); // Display hundreds digit on Display 1
-    lc.setDigit(0, 5, i / 100, false); // Display hundreds digit on Display 2
-
-    delay(250); // Delay to show each number for 500 milliseconds
+    lc.setDigit(0, 0, i % 10, false);
+    lc.setDigit(0, 3, i % 10, false);
+    lc.setDigit(0, 1, (i / 10) % 10, false);
+    lc.setDigit(0, 4, (i / 10) % 10, false);
+    lc.setDigit(0, 2, i / 100, false);
+    lc.setDigit(0, 5, i / 100, false);
+    delay(250);
   }
-  
-  //....................................End...........................................................
-  //...............Code  For Print  601 when encoder is not in defoult position.......................
 
-angle = readPosition(); // Update the current encoder value
-if (angle >= 0) {
-  currentCount = ((float)angle / 1024.0) * 360.0;
-}
+  // -------------  Code  For Print  601 when encoder is not in default position ---------------
 
-// When the encoder reads any value which is not between (358-2 degrees)
-if (currentCount > ACCEPTABLE_RANGE_LOWER_BOUND && currentCount < ACCEPTABLE_RANGE_UPPER_BOUND) {
-    lc.setDigit(0, 0, 1, false); // Display 6 on the leftmost digit
-    lc.setDigit(0, 1, 0, false); // Display 0 on the middle digit
-    lc.setDigit(0, 2, 6, false); // Display 1 on the rightmost digit
+  angle = readPosition(); // Update the current encoder value
+  if (angle >= 0) currentCount = ((float)angle / 1024.0) * 360.0;
+
+  // When the encoder reads any value which is not between INITIALLY (358-2 degrees)
+  // 1. Display 106
+  // 2. While encoder not in range
+  //    a. if angle > 183 then display error 103
+  if (currentCount > ACCEPTABLE_RANGE_LOWER_BOUND && currentCount < ACCEPTABLE_RANGE_UPPER_BOUND) {
+    // Print error code 601
+    lc.setDigit(0, 0, 1, false);
+    lc.setDigit(0, 1, 0, false);
+    lc.setDigit(0, 2, 6, false);
 
     while (currentCount > ACCEPTABLE_RANGE_LOWER_BOUND && currentCount < ACCEPTABLE_RANGE_UPPER_BOUND) {
-        if (currentCount > 183 && currentCount < ACCEPTABLE_RANGE_UPPER_BOUND) {
-            err(3);
-        }
-        angle = readPosition(); // Update the current encoder value
-        if (angle >= 0) {
-            currentCount = ((float)angle / 1024.0) * 360.0;
+
+      // If the machine is at this point then it's very critical to stop the machine and manually intervene to fix the issue.
+      if (currentCount > 183 && currentCount < ACCEPTABLE_RANGE_UPPER_BOUND) err(3);
+
+      // Update the current encoder value
+      angle = readPosition();
+      if (angle >= 0) currentCount = ((float)angle / 1024.0) * 360.0;
+
+      // If the user presses the peddle then  it automatically tires to bring the encoder to the default position.
+      if (digitalRead(pedal_90) == LOW) {
+        digitalWrite(relay_rev, HIGH);
+        updateDisplay(0, curPos, false);
+      }
+
+      // This is incase the user manually tries to calibrate the encoder to the default position.
+      if (digitalRead(inc_disp_1_btn) == LOW && digitalRead(inc_disp_2_btn) == LOW) {
+        
+        if (incButtonsStartTime == 0) incButtonsStartTime = millis();
+
+        if (millis() - incButtonsStartTime >= 1000) {
+            display_1_state = CALIBRATION_MODE;
+            display_2_state = CALIBRATION_MODE;
+            calibrationModeEntered = true;
+            enterCalibrationMode();
         }
 
-
-  if (digitalRead(inc_disp_1_btn) == LOW && digitalRead(inc_disp_2_btn) == LOW) {
-    if (incButtonsStartTime == 0) {
-        incButtonsStartTime = millis();
+      }
+      
+      else {
+        // Handle the Calibration_mode state
+        incButtonsStartTime = 0;
+      }
     }
 
-    if (millis() - incButtonsStartTime >= 1000) {
-        display_1_state = Calibration_mode;
-        display_2_state = Calibration_mode;
-        calibrationModeEntered = true;
-         enterCalibrationMode();
-       
-    }
-} else {
-  // Handle the Calibration_mode state
-    incButtonsStartTime = 0;
-   
+    digitalWrite(relay_rev, LOW);
+  }
 }
-        if (digitalRead(pedal_90) == LOW) {
-    digitalWrite(relay_rev, HIGH);
-    updateDisplay(0, curPos, false);
 
-    unsigned long startTime = millis();
-    while (millis() - startTime < no_movement_time_period) {
-        angle = readPosition();
-        if (angle >= 0) {
-            currentCount = ((float)angle / 1024.0) * 360.0;
-        }
 
-        if (currentCount != previousCount) {
-            startTime = millis();
-        }
-        previousCount = currentCount;
 
-        if (digitalRead(pedal_90) == HIGH) {
-            break; // Exit the loop if the pedal is released
-        }
-    }
 
-    if (millis() - startTime >= no_movement_time_period) {
-        err(2);
-    }
-}
-    }
-    }
-}
-//...................................END........................................................
-//............... Code for Determine the digits for the display based on the value..............
 void updateDisplay(byte address, int value, bool reverse) {
   // Determine the digits for the display based on the value.
   int digit1 = value % 10;
@@ -305,8 +286,9 @@ void updateDisplay(byte address, int value, bool reverse) {
   lc.setDigit(0, address + 1, digit2, false); // Display tens digit
   lc.setDigit(0, address + 2, digit3, false); // Display hundreds digit
 }
-//..............................................END........................................................
-//....................................code for encoder function............................................
+
+
+
 int readPosition() {
   unsigned int position = 0;
 
@@ -343,29 +325,23 @@ int readPosition() {
   return position;
 }
     
-    //........................................END...................................................
-    //..................................voide loop start............................................
-    void loop() {
-      // Turn off the relay when exiting the while loop
-
-    // Now, update the varCus variable based on the conditions you specified
-    if (curPos == 358 || curPos == 359 || curPos == 0 || curPos == 1 || curPos == 2) {
-        varCus = 0;
-    } else {
-        varCus = curPos;
-    }
 
 
+void loop() {
 
+  // Now, update the varCus variable based on the conditions you specified
+  if (curPos == 358 || curPos == 359 || curPos == 0 || curPos == 1 || curPos == 2) {
+      varCus = 0;
+  } else {
+      varCus = curPos;
+  }
 
-    //...................................................................................................
-    //...........................Code for Calibration_mode...............................................    
-    
-    // Define a flag to track if Calibration_mode is entered
-    bool calibrationModeEntered = false;
+  
+  // Define a flag to track if Calibration_mode is entered
+  bool calibrationModeEntered = false;
 
-    // Check if both inc1 and inc2 buttons are pressed for 3 seconds
-    // Check if both inc1 and inc2 buttons are pressed for 3 seconds
+  // Check if both inc1 and inc2 buttons are pressed for 3 seconds
+  // Check if both inc1 and inc2 buttons are pressed for 3 seconds
 
 if (digitalRead(inc_disp_1_btn) == LOW && digitalRead(inc_disp_2_btn) == LOW) {
     if (incButtonsStartTime == 0) {
@@ -373,8 +349,8 @@ if (digitalRead(inc_disp_1_btn) == LOW && digitalRead(inc_disp_2_btn) == LOW) {
     }
 
     if (millis() - incButtonsStartTime >= 1000) {
-        display_1_state = Calibration_mode;
-        display_2_state = Calibration_mode;
+        display_1_state = CALIBRATION_MODE;
+        display_2_state = CALIBRATION_MODE;
         calibrationModeEntered = true;
          enterCalibrationMode();
        
@@ -469,7 +445,7 @@ if (digitalRead(inc_disp_1_btn) == LOW && digitalRead(inc_disp_2_btn) == LOW) {
     modeButtonState1= digitalRead(pedal_135);
     modeButtonState2 = digitalRead(pedal_90);
 
-  //.....If beding has started but the encoder is not moving for 3 or whaever seconds then call error.......
+  //.....If bending has started but the encoder is not moving for 3 or whaever seconds then call error.......
     if (bending_just_started && (millis() - bending_start_time > no_movement_time_period) ) err(2);
   //.....................................END................................................................
 
@@ -570,11 +546,12 @@ byte shiftIn(byte data_pin, byte clock_pin) {
   }
   return data;
 }
+
   void enterCalibrationMode() {
-    display_1_state = Calibration_mode;
+    display_1_state = CALIBRATION_MODE;
     calibrationModeEntered = true;
 
-        while (display_1_state == Calibration_mode || display_2_state == Calibration_mode) {
+    while (display_1_state == CALIBRATION_MODE || display_2_state == CALIBRATION_MODE) {
         int encoderValue = readPosition();
         if (encoderValue >= 0) {
             curPos = ((float)encoderValue / 1024.0) * 360.0;
