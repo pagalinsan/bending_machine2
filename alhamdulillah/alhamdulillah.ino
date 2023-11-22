@@ -24,7 +24,7 @@ const unsigned long noMotionThreshold = 200; // Set the threshold to 200 millise
 bool calibrationModeEntered = false;
 
 
-int CurP = 0;
+int currentP = 0;
 
 
 // Push button delay
@@ -337,7 +337,14 @@ int readPosition() {
 
   return position;
 }
-    
+
+
+int calculate_offset(int x) {
+  if (x < ACCEPTABLE_RANGE_UPPER_BOUND && x > ACCEPTABLE_RANGE_LOWER_BOUND) err(5);
+  if (x => ACCEPTABLE_RANGE_UPPER_BOUND) return 360-x;
+  if (x <= ACCEPTABLE_RANGE_LOWER_BOUND) return -x;
+}
+
     //........................................END...................................................
     //..................................voide loop start............................................
 void loop() {
@@ -389,7 +396,7 @@ void loop() {
           else if ((display_1_state != BENDING) && (display_2_state != BENDING)) {
           // If the button is released, turn off the reverse relay
           digitalWrite(relay_rev, LOW);
-          }
+        }
 
     // If forward button is pressed, turn on the forward relay
     if (fwdButtonState == LOW) {
@@ -414,9 +421,7 @@ void loop() {
     //..........................................END..................................................
 
     //.....................Code for print err1 when both relays working together.....................
-    if (digitalRead(relay_fwd) == HIGH && digitalRead(relay_rev) == HIGH) {  
-      err(1);
-    }
+    if (digitalRead(relay_fwd) == HIGH && digitalRead(relay_rev) == HIGH) err(1);
     //..........................................END..................................................
 
 
@@ -467,29 +472,8 @@ void loop() {
       angle = readPosition(); // Update the current encoder value
       if (angle >= 0) {
         currentCount = ((float)angle / 1024.0) * 360.0;
-        CurP = currentCount; // Store the initial position before bending starts
-            if (CurP == 359) {
-                CurP = -1; // Adjust to -1 if it was 359
-            } else if (CurP == 358) {
-                CurP = -2; // Adjust to -2 if it was 358
-            } else if (CurP == 357) {
-                CurP = -3; // Adjust to -3 if it was 357
-            } else if (CurP == 356) {
-                CurP = -4; // Adjust to -4 if it was 356
-            } else if (CurP == 1) {
-                CurP = 1; // 
-            } else if (CurP == 1) {
-                CurP = 1; // 
-            } else if (CurP == 2) {
-                CurP = 2; // 
-            } else if (CurP ==3) {
-            CurP = 3; // 
-            } else if (CurP ==4) {
-                CurP = 4; // 
-            } else {
-              err(5); 
-              }
-            }
+        currentP = calculate_offset(currentCount); // Store the initial position before bending starts
+      }
     
         display_1_state = BENDING;
         bending_start_time = millis();
@@ -500,36 +484,16 @@ void loop() {
         prev_disp_state = BENDING;
     }
     //...........................................End........................................................
+    
     //..............................Code For bending mode 135 Default........................................
+    
     if (modeButtonState2 == LOW && display_1_state != BENDING && display_2_state != BENDING) {
         angle = readPosition(); // Update the current encoder value
         if (angle >= 0) {
             currentCount = ((float)angle / 1024.0) * 360.0;
-            CurP = currentCount; // Store the initial position before bending starts
-           // Adjust CurP based on certain conditions
-            if (CurP == 359) {
-                CurP = -1; // Adjust to -1 if it was 359
-            } else if (CurP == 358) {
-                CurP = -2; // Adjust to -2 if it was 358
-            } else if (CurP == 357) {
-                CurP = -3; // Adjust to -3 if it was 357
-            } else if (CurP == 356) {
-                CurP = -4; // Adjust to -4 if it was 356
-            } else if (CurP == 0) {
-                CurP = 0; // 
-            } else if (CurP == 1) {
-                CurP = 1; // 
-            } else if (CurP ==2) {
-                CurP = 2; // 
-            } else if (CurP ==3) {
-                CurP = 4; //
-            } else if (CurP ==4) {
-                CurP = 4; // 
-            }
-              else {
-              err(5); 
-              }
-            }
+            currentP = calculate_offset(currentCount);
+        
+        }
         display_2_state = BENDING;
         bending_start_time = millis();
         bending_start_timestamp = millis();
@@ -559,7 +523,7 @@ void loop() {
       err(3);
     }
     
-    AngShow = curPos - CurP;
+    AngShow = curPos - currentP;
     // Update Display 1 with Encoder or Counter Value
     if (display_1_state == BENDING) updateDisplay(0, AngShow, false);
     else updateDisplay(0, disp_cntr_1, false);
@@ -572,12 +536,12 @@ void loop() {
 
     // Check if the either of the counters have reached the desired postion.
     // If so, then stop bending and reverse.
-    if ((curPos - CurP) == disp_cntr_1 && display_1_state == BENDING) {
+    if ((curPos - currentP) == disp_cntr_1 && display_1_state == BENDING) {
         curPosMatchesDispCntr1 = true;
         digitalWrite(relay_fwd, LOW);
         digitalWrite(relay_rev, HIGH);
     }
-    if ((curPos - CurP)== disp_cntr_2 && display_2_state == BENDING) {
+    if ((curPos - currentP)== disp_cntr_2 && display_2_state == BENDING) {
         curPosMatchesDispCntr2 = true;
         digitalWrite(relay_fwd,LOW);
         digitalWrite(relay_rev, HIGH);
@@ -590,23 +554,29 @@ void loop() {
           long int initialEncoderValue = readPosition();
 
         while (millis() - noChangeTimer <= 500) {
-            // Check if the encoder value has changed
+          
+          // Check if the encoder value has changed
           if (readPosition() != initialEncoderValue) {
               noChangeTimer = millis(); // Reset the timer if there is a change
               initialEncoderValue = readPosition(); // Update the initial encoder value
           }
-            delay(100); // Adjust the delay based on the desired interval
+            // delay(100); // Adjust the delay based on the desired interval
+            angle = readPosition();
+            if (angle >= 0) currentCount = ((float)angle / 1024.0) * 360.0;
+            updateDisplay( (display_1_state == BENDING)? 0:3 , currentCount - currentP , false);
         }
 
-          digitalWrite(relay_rev, LOW);
+        delay(300);
 
-          curPosMatchesDispCntr1 = false;
-          curPosMatchesDispCntr2 = false;
-          display_1_state = SHOWING_COUNTER;
-          display_2_state = SHOWING_COUNTER;
-          curPos = 0;
-          previousCount = 0;
-          currentCount = 0;
+        digitalWrite(relay_rev, LOW);
+
+        curPosMatchesDispCntr1 = false;
+        curPosMatchesDispCntr2 = false;
+        display_1_state = SHOWING_COUNTER;
+        display_2_state = SHOWING_COUNTER;
+        curPos = 0;
+        previousCount = 0;
+        currentCount = 0;
       }
     }
   }
