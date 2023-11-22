@@ -47,7 +47,7 @@ const int CS_PIN = 11;  // SS (Slave Select)
 LedControl lc = LedControl(DIN_PIN, CLK_PIN, CS_PIN, 1); // 1 MAX7219 IC controlling both displays
 
 // Rotary Encoder Sate tracking.
-long currentCount = 0;
+long __currentCount = 0;
 long previousCount = 0;
 int curPos = 0;
 float angle = 0;
@@ -237,22 +237,22 @@ void setup() {
 
 angle = readPosition(); // Update the current encoder value
     if (angle >= 0) {
-      currentCount = ((float)angle / 1024.0) * 360.0;
+      __currentCount = ((float)angle / 1024.0) * 360.0;
     }
 
 // When the encoder reads any value which is not between (358-2 degrees)
-  if (currentCount > ACCEPTABLE_RANGE_LOWER_BOUND && currentCount < ACCEPTABLE_RANGE_UPPER_BOUND) {
+  if (__currentCount > ACCEPTABLE_RANGE_LOWER_BOUND && __currentCount < ACCEPTABLE_RANGE_UPPER_BOUND) {
     lc.setDigit(0, 0, 1, false); // Display 6 on the leftmost digit
     lc.setDigit(0, 1, 0, false); // Display 0 on the middle digit
     lc.setDigit(0, 2, 6, false); // Display 1 on the rightmost digit
 
-    while (currentCount > ACCEPTABLE_RANGE_LOWER_BOUND && currentCount < ACCEPTABLE_RANGE_UPPER_BOUND) {
-                    if (currentCount > 183 && currentCount < ACCEPTABLE_RANGE_UPPER_BOUND) {
+    while (__currentCount > ACCEPTABLE_RANGE_LOWER_BOUND && __currentCount < ACCEPTABLE_RANGE_UPPER_BOUND) {
+                    if (__currentCount > 183 && __currentCount < ACCEPTABLE_RANGE_UPPER_BOUND) {
                     err(3);
                     }
                    angle = readPosition(); // Update the current encoder value
                   if (angle >= 0) {
-                  currentCount = ((float)angle / 1024.0) * 360.0;
+                  __currentCount = ((float)angle / 1024.0) * 360.0;
                   }
 
 
@@ -278,7 +278,7 @@ angle = readPosition(); // Update the current encoder value
               digitalWrite(relay_rev, HIGH);
               angle = readPosition(); // Update the current encoder value
         if (angle >= 0) {
-              currentCount = ((float)angle / 1024.0) * 360.0;
+              __currentCount = ((float)angle / 1024.0) * 360.0;
         }
           updateDisplay(0, curPos, false);
       }
@@ -341,7 +341,7 @@ int readPosition() {
 
 int calculate_offset(int x) {
   if (x < ACCEPTABLE_RANGE_UPPER_BOUND && x > ACCEPTABLE_RANGE_LOWER_BOUND) err(5);
-  if (x => ACCEPTABLE_RANGE_UPPER_BOUND) return 360-x;
+  if (x >= ACCEPTABLE_RANGE_UPPER_BOUND) return 360-x;
   if (x <= ACCEPTABLE_RANGE_LOWER_BOUND) return -x;
 }
 
@@ -388,7 +388,7 @@ void loop() {
         digitalWrite(relay_rev, HIGH);
         angle = readPosition(); // Update the current encoder value
           if (angle >= 0) {
-            currentCount = ((float)angle / 1024.0) * 360.0;
+            __currentCount = ((float)angle / 1024.0) * 360.0;
           }
         updateDisplay(0, curPos, false);  // Update display 1
         updateDisplay(3, curPos, false);  // Update display 2
@@ -404,7 +404,7 @@ void loop() {
         // Update both displays with the encoder value
         angle = readPosition(); // Update the current encoder value
         if (angle >= 0) {
-          currentCount = ((float)angle / 1024.0) * 360.0;
+          __currentCount = ((float)angle / 1024.0) * 360.0;
         }
         updateDisplay(0, curPos, false);  // Update display 1
         updateDisplay(3, curPos, false);  // Update display 2
@@ -471,8 +471,8 @@ void loop() {
     if (modeButtonState1 == LOW && display_2_state != BENDING && display_1_state != BENDING) {
       angle = readPosition(); // Update the current encoder value
       if (angle >= 0) {
-        currentCount = ((float)angle / 1024.0) * 360.0;
-        currentP = calculate_offset(currentCount); // Store the initial position before bending starts
+        __currentCount = ((float)angle / 1024.0) * 360.0;
+        currentP = calculate_offset(__currentCount); // Store the initial position before bending starts
       }
     
         display_1_state = BENDING;
@@ -490,8 +490,8 @@ void loop() {
     if (modeButtonState2 == LOW && display_1_state != BENDING && display_2_state != BENDING) {
         angle = readPosition(); // Update the current encoder value
         if (angle >= 0) {
-            currentCount = ((float)angle / 1024.0) * 360.0;
-            currentP = calculate_offset(currentCount);
+            __currentCount = ((float)angle / 1024.0) * 360.0;
+            currentP = calculate_offset(__currentCount);
         
         }
         display_2_state = BENDING;
@@ -508,15 +508,15 @@ void loop() {
     angle = readPosition();
    if (angle >= 0)
    {
-    currentCount = ((float)angle / 1024.0) * 360.0;
+    __currentCount = ((float)angle / 1024.0) * 360.0;
    }
     // Check if the encoder value has changed
-    if (currentCount != previousCount) {
+    if (__currentCount != previousCount) {
 
         if (bending_just_started = false);
         
-        curPos += (currentCount - previousCount); // Update the current position
-        previousCount = currentCount; // Update the previous count
+        curPos += (__currentCount - previousCount); // Update the current position
+        previousCount = __currentCount; // Update the previous count
     }
 
     if (curPos > 183 && curPos < ACCEPTABLE_RANGE_UPPER_BOUND ) {
@@ -560,10 +560,11 @@ void loop() {
               noChangeTimer = millis(); // Reset the timer if there is a change
               initialEncoderValue = readPosition(); // Update the initial encoder value
           }
-            // delay(100); // Adjust the delay based on the desired interval
-            angle = readPosition();
-            if (angle >= 0) currentCount = ((float)angle / 1024.0) * 360.0;
-            updateDisplay( (display_1_state == BENDING)? 0:3 , currentCount - currentP , false);
+          delay(200); // Adjust the delay based on the desired interval
+          int __angle = readPosition();
+          int __currentCount = 0;
+          if (__angle >= 0) __currentCount = ((float)__angle / 1024.0) * 360.0;
+          updateDisplay( (display_1_state == BENDING)? 0:3 , __currentCount - currentP , false);
         }
 
         delay(300);
@@ -576,7 +577,7 @@ void loop() {
         display_2_state = SHOWING_COUNTER;
         curPos = 0;
         previousCount = 0;
-        currentCount = 0;
+        __currentCount = 0;
       }
     }
   }
